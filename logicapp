@@ -1,0 +1,195 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "actions": {
+            "Condition": {
+                "actions": {
+                    "Create_Folder": {
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['azuredatalake']['connectionId']"
+                                }
+                            },
+                            "method": "put",
+                            "path": "/store/folders/webhdfs/v1/",
+                            "queries": {
+                                "account": "deletefolders",
+                                "op": "MKDIRS",
+                                "path": "raw"
+                            }
+                        },
+                        "runAfter": {},
+                        "type": "ApiConnection"
+                    }
+                },
+                "else": {
+                    "actions": {
+                        "Send_an_email_(V2)": {
+                            "inputs": {
+                                "body": {
+                                    "Body": "<p>Your ADF pipeline run was unsuccessful. You might want to look into it</p>",
+                                    "Subject": "Overnight ADLS Delete",
+                                    "To": "christian.gero@microsoft.com"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['office365']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/v2/Mail"
+                            },
+                            "runAfter": {},
+                            "type": "ApiConnection"
+                        }
+                    }
+                },
+                "expression": {
+                    "and": [
+                        {
+                            "contains": [
+                                "@body('Get_a_pipeline_run')?['status']",
+                                "Succeeded"
+                            ]
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Until": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "If"
+            },
+            "Create_a_pipeline_run": {
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azuredatafactory']['connectionId']"
+                        }
+                    },
+                    "method": "post",
+                    "path": "/subscriptions/@{encodeURIComponent('1bc39bbd-4f6a-448a-878b-8be2190258f1')}/resourcegroups/@{encodeURIComponent('deletefolders')}/providers/Microsoft.DataFactory/factories/@{encodeURIComponent('deletefoldersadf')}/pipelines/@{encodeURIComponent('pipeline1')}/CreateRun",
+                    "queries": {
+                        "x-ms-api-version": "2017-09-01-preview"
+                    }
+                },
+                "runAfter": {
+                    "List_Files": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ApiConnection"
+            },
+            "List_Files": {
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azuredatalake']['connectionId']"
+                        }
+                    },
+                    "method": "get",
+                    "path": "/store/folders/webhdfs/v1/",
+                    "queries": {
+                        "account": "deletefolders",
+                        "op": "LISTSTATUS"
+                    }
+                },
+                "runAfter": {},
+                "type": "ApiConnection"
+            },
+            "Until": {
+                "actions": {
+                    "Delay": {
+                        "inputs": {
+                            "interval": {
+                                "count": 5,
+                                "unit": "Second"
+                            }
+                        },
+                        "runAfter": {
+                            "Get_a_pipeline_run": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "Wait"
+                    },
+                    "Get_a_pipeline_run": {
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['azuredatafactory']['connectionId']"
+                                }
+                            },
+                            "method": "get",
+                            "path": "/subscriptions/@{encodeURIComponent('1bc39bbd-4f6a-448a-878b-8be2190258f1')}/resourcegroups/@{encodeURIComponent('deletefolders')}/providers/Microsoft.DataFactory/factories/@{encodeURIComponent('deletefoldersadf')}/pipelineRuns/@{encodeURIComponent(body('Create_a_pipeline_run')?['runId'])}",
+                            "queries": {
+                                "x-ms-api-version": "2017-09-01-preview"
+                            }
+                        },
+                        "runAfter": {},
+                        "type": "ApiConnection"
+                    }
+                },
+                "expression": "@contains(body('Get_a_pipeline_run')?['status'], 'Succeeded')",
+                "limit": {
+                    "count": 60,
+                    "timeout": "PT1H"
+                },
+                "runAfter": {
+                    "Create_a_pipeline_run": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Until"
+            }
+        },
+        "contentVersion": "1.0.0.0",
+        "outputs": {},
+        "parameters": {
+            "$connections": {
+                "defaultValue": {},
+                "type": "Object"
+            }
+        },
+        "triggers": {
+            "Recurrence": {
+                "recurrence": {
+                    "frequency": "Day",
+                    "interval": 1,
+                    "schedule": {
+                        "hours": [
+                            "2"
+                        ],
+                        "minutes": [
+                            0
+                        ]
+                    }
+                },
+                "type": "Recurrence"
+            }
+        }
+    },
+    "parameters": {
+        "$connections": {
+            "value": {
+                "azuredatafactory": {
+                    "connectionId": "/subscriptions/1bc39bbd-4f6a-448a-878b-8be2190258f1/resourceGroups/deletefolders/providers/Microsoft.Web/connections/azuredatafactory",
+                    "connectionName": "azuredatafactory",
+                    "id": "/subscriptions/1bc39bbd-4f6a-448a-878b-8be2190258f1/providers/Microsoft.Web/locations/eastus/managedApis/azuredatafactory"
+                },
+                "azuredatalake": {
+                    "connectionId": "/subscriptions/1bc39bbd-4f6a-448a-878b-8be2190258f1/resourceGroups/deletefolders/providers/Microsoft.Web/connections/azuredatalake",
+                    "connectionName": "azuredatalake",
+                    "id": "/subscriptions/1bc39bbd-4f6a-448a-878b-8be2190258f1/providers/Microsoft.Web/locations/eastus/managedApis/azuredatalake"
+                },
+                "office365": {
+                    "connectionId": "/subscriptions/1bc39bbd-4f6a-448a-878b-8be2190258f1/resourceGroups/deletefolders/providers/Microsoft.Web/connections/office365",
+                    "connectionName": "office365",
+                    "id": "/subscriptions/1bc39bbd-4f6a-448a-878b-8be2190258f1/providers/Microsoft.Web/locations/eastus/managedApis/office365"
+                }
+            }
+        }
+    }
+}
